@@ -1,0 +1,62 @@
+syntax = "proto3";
+
+package local.grpc.telegraph;
+
+// #includes
+import "base.proto";
+import "pubsub.proto";
+import "records.proto";
+import "wire.proto";
+
+option go_package = "github.com/ramr/go-grpc-telegraph/proto";
+
+// Note can be either a record (basically events and messages sent from the
+// device) or it can be a subscription sent by the device.
+message Note {
+  oneof kind {
+    Empty empty = 1;
+    Record record = 2;  // vinyl - go discogs!
+    Subscription subscription = 3;
+
+    // Leave some room for growth - #15 still takes only 1 byte to encode.
+    Generic generic = 15;
+  }
+}
+
+// Answer sent from the service ... normally an ACK or a publication.
+message Answer {
+  oneof kind {
+    Empty empty = 1;
+    Ack ack = 2;
+    Publication publication = 3;  // please like and subscribe!
+
+    // Leave some room for growth - #15 still takes only 1 byte to encode.
+    Generic generic = 15;
+  }
+}
+
+// A Communique is basically a "packaged" note sent from the device.
+// A long time ago came a man on a track, walking 30 miles with a sack
+// on his back ...
+message Communique {
+  Envelope envelope = 1;
+  Credentials credentials = 2;
+  Note note = 3; // CDEFGAB!
+}
+
+// Response from the service.
+message Response {
+  Envelope envelope = 1;
+  Answer answer = 2;
+}
+
+// Telegraph service ... telegraph sang a song about the world outside!
+service TelegraphService {
+  //  Dispatch a communique or a stream of 'em ...
+  rpc Dispatch(Communique) returns (Response) {}
+  rpc DispatchUnary(Communique) returns (Response) {}
+  rpc DispatchStream(stream Communique) returns (Response) {}
+
+  //  Subscribe and receive a stream of publications ...
+  rpc Subscribe(Communique) returns (stream Response) {}
+}

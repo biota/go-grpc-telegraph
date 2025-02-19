@@ -1,0 +1,106 @@
+syntax = "proto3";
+
+package local.grpc.telegraph;
+
+// #includes
+import "google/protobuf/timestamp.proto";
+
+import "base.proto";
+
+option go_package = "github.com/ramr/go-grpc-telegraph/proto";
+
+// Task states.
+enum State {
+  STATE_NONE_UNSPECIFIED = 0;
+  STATE_INITIAL = 1;
+  STATE_QUEUED = 2;
+  STATE_RUNNING = 7;
+
+  // These are end states.
+  STATE_COMPLETED = 42;
+  STATE_TIMED_OUT = 90;
+  STATE_ABORTED = 91;
+  STATE_FAILED = 92;
+  STATE_REJECTED = 93;
+}
+
+// Levels for events.
+enum Level {
+  LEVEL_NONE_UNSPECIFIED = 0;
+  LEVEL_EMERGENCY = 1;
+  LEVEL_ALERT = 2;
+  LEVEL_CRITICAL = 3;
+  LEVEL_ERROR = 4;
+  LEVEL_WARN = 5;
+  LEVEL_NOTICE = 6;
+  LEVEL_INFO = 7;
+  LEVEL_DEBUG = 8;
+}
+
+// This section contains records (registration, events, statuses etc)
+// sent from a device.
+
+// Registration information.
+message Registration {
+  string device = 1;
+  string token = 2;  // allow for on-the-fly device registrations.
+  bytes data = 3;
+  Generic info = 4;
+}
+
+// Status event from the device.
+// Note: The task and step values indicate the status is for a task step.
+//       And you can get multiple statuses from a task and/or task step.
+//       In most cases, the end state should indicate that you will get no
+//       more messages for a task and/or task step.
+//       But that's left to the implementer ...
+message Status {
+  string task = 1;
+  string step = 2;
+  State state = 3;   // No state indicates progress [bar]!!
+  Generic info = 4;
+}
+
+// Metrics information sent from the device.
+message Metrics {
+  Tag tag = 1;
+  repeated Generic measures = 2;  // tandem, ftw!
+}
+
+// Incident event sent from the device.
+message Incident {
+  Level category = 1;
+  Generic info = 2;
+}
+
+// Timing event sent from the device.
+message Timing {
+  google.protobuf.Timestamp start = 1;
+  google.protobuf.Timestamp end = 2;
+  Generic info = 3;
+}
+
+// Trace event sent from the device.
+message Trace {
+  Fields location = 1;
+  Generic info = 2;
+}
+
+// And the amalgamation of the lot ... records sent from the device.
+
+// Message being sent from the device - the record (top-10 list!).
+message Record {
+  oneof kind {
+    Empty empty = 1;
+    Ack ack = 2;
+    Registration registration = 3;
+    Status status = 4;
+    Incident incident = 5;
+    Metrics metrics = 6;
+    Timing timing = 7;
+    Trace trace = 8;
+
+    // Leave some room for growth - #15 still takes only 1 byte to encode.
+    Generic generic = 15;
+  }
+}

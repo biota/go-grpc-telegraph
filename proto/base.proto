@@ -1,0 +1,82 @@
+syntax = "proto3";
+
+package local.grpc.telegraph;
+
+// #includes
+import "google/protobuf/any.proto";
+import "google/protobuf/struct.proto";
+
+option go_package = "github.com/ramr/go-grpc-telegraph/proto";
+
+// tag-lia-tele-graph ... edelcrantzed 610-003-162!
+message Tag {
+  bytes value = 1;
+}
+
+// Might be overkill, as you can just stuff JSON into a string field but
+// OTOH the extended field does allow for custom types, so let's just see
+// how this goes ..
+message Fields {
+  // Note: values is a list of values and can include a map, so the first
+  //       entry can hold key-value pairs/struct/map if desired.
+  google.protobuf.ListValue values = 1;
+  map<string, google.protobuf.Any> extended = 2;
+}
+
+// Port.
+message Port {
+  oneof kind {
+    uint32 port = 1;  // Port number.
+    string name = 2;  // Service name ala gribi/http/https etc.
+                      // See iana port assignments.
+  }
+}
+
+// Endpoint to contact a remote service.
+message Endpoint {
+  string host = 1;  // Host name or IP address.
+  Port port = 2;    // TCP Port name or number. In most cases, this will
+                    // default to 9340.
+}
+
+// Address.
+message Address {
+  oneof kind {
+    uint64 routeid = 1;
+    string hostport = 2;    // Host name or IP address and Port form.
+    Endpoint endpoint = 3;
+    Fields fields = 4;
+  }
+}
+
+// Who created the message.
+message Producer {
+  string name = 1;
+  uint32 version = 2;
+  string pid = 3;
+}
+
+// Access credentials - extended fields to add custom info.
+message Credentials {
+  string token = 1;
+  Fields troth = 2;  // Solemn declarations!
+}
+
+// This section provides some standard messages and events.
+
+// Empty message.
+message Empty {
+}
+
+// Acknowlegement.
+message Ack {
+  Tag origination = 1;  // Origination tag if any.
+  bytes msg = 2;
+}
+
+// Generic message (or event or config) - byte stream with ListValue(map).
+message Generic {
+  string name = 1;
+  bytes data = 2;
+  Fields fields = 3;
+}

@@ -1,0 +1,70 @@
+syntax = "proto3";
+
+package local.grpc.telegraph;
+
+// #includes
+import "base.proto";
+
+option go_package = "github.com/ramr/go-grpc-telegraph/proto";
+
+// Config category enums.
+enum Category {
+  CATEGORY_NONE_UNSPECIFIED = 0;
+  CATEGORY_INCIDENTS = 1;
+  CATEGORY_METRICS = 2;
+  CATEGORY_TIMINGS = 3;
+  CATEGORY_TRACES = 4;
+  CATEGORY_LOGS = 5;
+  CATEGORY_TASKS = 6;
+  CATEGORY_MANAGEMENT = 7;
+  CATEGORY_OTHER = 15;
+}
+
+// Membership publication.
+message Membership {
+  string device = 1;
+  string token = 2;  // token sent with the registration message.
+  bytes data = 3;
+  Generic info = 4;
+}
+
+// Configuration component.
+message Component {
+  Category category = 1;
+  bool enable = 2;
+  Generic options = 3;
+}
+
+// Config directives sent to the device from the service.
+message Config {
+  string name = 1;
+  repeated Component iotas = 2;
+}
+
+// System (ala management commands) or user task directive to the
+// device to do some work.
+message Task {
+  string name = 1;
+  bool system = 2;
+  repeated Generic steps = 3;
+}
+
+// Publication sent from the service - the response to a subscription
+// request (play it, sam!).
+message Publication {
+  oneof kind {
+    Empty empty = 1;
+    Membership permit = 2;
+    Config config = 3;
+    Task task = 4;
+
+    // Keep some space for forward compatibility.
+    Generic generic = 15;
+  }
+}
+
+// Subscription to a topic.
+message Subscription {
+  string topic = 1;
+  Generic data = 2;
+}

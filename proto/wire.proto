@@ -1,0 +1,45 @@
+syntax = "proto3";
+
+package local.grpc.telegraph;
+
+// #includes
+import "google/protobuf/timestamp.proto";
+
+import "base.proto";
+
+option go_package = "github.com/ramr/go-grpc-telegraph/proto";
+
+// Origin of species - where did you come from?
+message Origin {
+  Address address = 1;
+  Producer producer = 2;
+}
+
+// Destiny's child - where will you go!
+message Destination {
+  Address address = 1;
+  Tag recipient = 2;
+}
+
+// Routing information.
+message Route {
+  // The ho[o]ps we went through!
+  // Note: repeated fields are inherently optional.
+  repeated Address hops = 1;
+  repeated Tag labels = 2;
+}
+
+// Telegraph postmark.
+message Postmark {
+  Tag tag = 1; // Unique local tracking id (can use for retries).
+  google.protobuf.Timestamp when = 2;
+}
+
+// Telegraph envelope - let's not get to soapy here!
+message Envelope {
+  Postmark postmark = 1;  // Yeah, postal service-ish ...
+  Origin origin = 2;
+  Destination destination = 3;
+  Route routing = 4;
+  Fields fields = 5;
+}

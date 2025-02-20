@@ -1,0 +1,237 @@
+#!/bin/bash
+
+set -euo pipefail
+
+SCRIPT_DIR=$(cd -P "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+readonly SCRIPT_DIR
+
+DEPS_DIR=$(cd -P "${SCRIPT_DIR}/../dependencies" && pwd)
+readonly DEPS_DIR
+
+# shellcheck source=/dev/null
+source "${SCRIPT_DIR}/releases.env"
+
+
+#
+#  Get protobuf download link.
+#
+#  Usage:  _get_protobuf_download_link
+#
+#  Examples:
+#      _get_protobuf_download_link
+#
+function _get_protobuf_download_link() {
+    local repodir="https://github.com/protocolbuffers/protobuf"
+    local version="v${PROTOC_RELEASE}"
+    local dluri="${repodir}//releases/download/${version}"
+    local suffix=""
+
+    local name=""
+    name=$(uname -m)
+
+    #  For now, only support x86-64 and aarch 64.
+    case "${name}" in
+        x86_64)
+            suffix="x86_64";
+            ;;
+
+        aarch64)
+            suffix="aarch_64";
+            ;;
+
+        *)  echo "ERROR: Unsupported architecture ${name}" >&2;
+            exit 78;
+            ;;
+    esac
+
+
+    echo "${dluri}/protoc-${PROTOC_RELEASE}-linux-${suffix}.zip"
+
+}  #  End of function  _get_protobuf_download_link.
+
+
+#
+#  Get protolint download link.
+#
+#  Usage:  _get_protolint_download_link
+#
+#  Examples:
+#      _get_protolint_download_link
+#
+function _get_protolint_download_link() {
+    local repodir="https://github.com/yoheimuta/protolint"
+    local version="v${PROTOLINT_RELEASE}"
+    local dluri="${repodir}//releases/download/${version}"
+    local suffix=""
+
+    local name=""
+    name=$(uname -m)
+
+    #  For now, only support x86-64 and aarch 64.
+    case "${name}" in
+        x86_64)
+            suffix="amd64";
+            ;;
+
+        aarch64)
+            suffix="arm64";
+            ;;
+
+        *)  echo "ERROR: Unsupported architecture ${name}" >&2;
+            exit 78;
+            ;;
+    esac
+
+    echo "${dluri}/protolint_${PROTOLINT_RELEASE}_linux_${suffix}.tar.gz"
+
+}  #  End of function  _get_protolint_download_link.
+
+
+#
+#  Install golang binaries.
+#
+#  Usage:  _install_go_binary  <binaries>
+#
+#  Examples:
+#      _install_go_binary  protobuf/bin/protoc
+#
+#      _install_go_binary  protolint/{protolint,protoc-gen-protolint}
+#
+function _install_go_binary() {
+    local bindir=""
+    bindir="$(go env GOPATH)/bin"
+
+    mkdir -p "${bindir}"
+
+    echo "  - Copying $* binaries to ${bindir} ..."
+    cp "$@" "${bindir}"
+
+}  #  End of function  _install_go_binary.
+
+
+#
+#  Install protobuf (install protoc and download includes).
+#
+#  Usage:  _install_protobuf
+#
+#  Examples:
+#      _install_protobuf
+#
+function _install_protobuf() {
+    local dluri=""
+    dluri=$(_get_protobuf_download_link)
+
+    cd "${DEPS_DIR}"
+    rm -f protobuf-linux.zip || :
+
+    echo "  - Downloading protoc from ${dluri} ..."
+    wget --quiet "${dluri}" -O protobuf-linux.zip
+
+    echo "  - Extracting protobuf zip file ..."
+    rm -rf protobuf || :
+    mkdir -p protobuf
+    unzip protobuf-linux.zip -d protobuf
+    chmod 755 protobuf/bin/protoc
+
+    echo "  - Copying protoc binary ..."
+    _install_go_binary  protobuf/bin/protoc
+
+    echo "  - protoc path = $(command -v protoc)"
+    echo "  - Locally installed protoc version = $(protoc --version)"
+
+}  #  End of function  _install_protobuf.
+
+
+#
+#  Install protolint.
+#
+#  Usage:  _install_protolint
+#
+#  Examples:
+#      _install_protolint
+#
+function _install_protolint() {
+    local dluri=""
+    dluri=$(_get_protolint_download_link)
+
+    cd "${DEPS_DIR}"
+    rm -f protolint.tar.gz || :
+
+    echo "  - Downloading protolint from ${dluri} ..."
+    wget --quiet "${dluri}" -O protolint.tar.gz
+
+    mkdir -p protolint
+
+    echo "  - Extracting protolint targz ..."
+    tar -zxvf protolint.tar.gz -C protolint
+
+    echo "  - Copying protolint binaries ..."
+    _install_go_binary  protolint/protolint  protolint/protoc-gen-protolint
+
+    echo "  - protolint path = $(command -v protolint)"
+    echo "  - Locally installed protolint version = $(protolint version)"
+
+}  #  End of function  _install_protolint.
+
+
+#
+#  Print installed proto* versions.
+#
+#  Usage:  _print_installed_versions
+#
+#  Examples:
+#      _print_installed_versions
+#
+function _print_installed_versions() {
+    local bindir=""
+    bindir="$(go env GOPATH)/bin"
+
+    (export PATH="${bindir}:${PATH}"; echo "";                \
+        echo "  - protoc version = $(protoc --version)";      \
+        echo "  - protolint version = $(protolint version)";  \
+    )
+
+}  #  End of function  _print_installed_versions.
+
+
+#
+#  Install golang dependencies.
+#
+#  Usage:  _install_dependencies
+#
+#  Examples:
+#      _install_dependencies
+#
+function _install_dependencies() {
+    echo ""
+    echo "  - Installing dependencies ..."
+
+    export GO111MODULE=on
+
+    echo "  - Installing protobuf ..."
+    _install_protobuf
+
+    echo "  - Installing protolint ..."
+    _install_protolint
+
+    echo "  - Getting protobuf/protoc-gen-go ..."
+    go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
+
+    echo "  - Getting grpc/protoc-gen-go-rpc ..."
+    go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
+
+    #echo "  - Downloading go modules ..."
+    #go mod download
+
+    _print_installed_versions
+
+    echo "  - Completed installing dependencies."
+    echo ""
+
+}  #  End of function  _install_dependencies.
+
+
+#
+#  main():
+#
+_install_dependencies

@@ -30,42 +30,33 @@ clean:
 deps:	dependencies
 
 dependencies:
-	@echo "  - Checking dependencies ..."
-	(cd ../build/dependencies && $(MAKE) install)
+	@echo "  - Installing dependencies if needed ..."
+	(cd "$(PROTO_DIR)"/../build && $(MAKE) install)
 
 depclean:
 	@echo "  - Cleaning dependencies ..."
-	(cd ../build/dependencies && $(MAKE) clean)
+	(cd "$(PROTO_DIR)"/../build && $(MAKE) clean)
 
 
 #
 #  Generate and build golang code.
 #
-codegen:	protoc
+codegen:	dependencies
 	@echo "  - Generating golang code for protobuf ..."
 	@protoc --go_out=./ --go_opt=paths=source_relative            \
 	        --go-grpc_out=./ --go-grpc_opt=paths=source_relative  \
 	        -I "../build/dependencies/protobuf/include"  -I ./    \
 	        *.proto
 
-protoc:
-	@echo "  - Checking protoc ..."
-	(cd ../build/dependencies && $(MAKE) protoc)
 
-
-# Linters and tests.
-
+#
 #  Linters.
 #
-protolint:	$(BINDIR)/protolint
+protolint:	dependencies
 	@echo "  - Linting protobuf ..."
 	@echo "  - protolint version = $$(protolint version)"
-	protolint lint *.proto
-
-$(BINDIR)/protolint:
-	@echo "  - Missing protolint, installing dependencies ..."
-	@$(MAKE) dependencies
+	@protolint lint *.proto
 
 
 .PHONY:	build check lint test tests clean
-.PHONY:	deps dependencies depclean codegen protoc protolint
+.PHONY:	deps dependencies depclean codegen protolint

@@ -1,0 +1,294 @@
+#!/bin/bash
+
+set -euo pipefail
+
+SCRIPT_DIR=$(cd -P "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+readonly SCRIPT_DIR
+
+readonly EXT_CONF="${SCRIPT_DIR}/extension.conf"
+readonly DEVICE_EXT_CONF="${SCRIPT_DIR}/device-ext.conf"
+
+TLS_CONFIG_DIR=$(cd -P "${SCRIPT_DIR}/tls" && pwd)
+readonly TLS_CONFIG_DIR
+
+readonly DEBUG_OUTPUT=/tmp/tls-debug-$$.out
+
+
+#
+#  Note: openssl default key size for rsa keys is 2048.
+#        For stronger encryption, use more `nbits` ala rsa:4096
+#
+readonly NEWKEY_ARG=${NEWKEY_ARG:-"rsa"}
+
+readonly ORG="biota"
+readonly CNAME="telegraph.${ORG}.local"
+readonly SUBJECT_PREFIX="/C=US/ST=CA/L=baylands/O=${ORG}"
+
+
+#
+#  Generate TLS service configuration for running tests.
+#
+#  Usage:  _generate_tls_service_config
+#
+#  Examples:
+#      _generate_tls_service_config
+#
+function _generate_tls_service_config() {
+    local outdir=""
+    outdir=$(pwd)
+
+    local subdir=""
+    subdir=$(basename "${outdir}")
+
+    #  Ensure output and bundle directories exist.
+    mkdir -p "${outdir}/bundle"
+
+    local email="${ORG}-service@${CNAME}"
+    local suffix="CN=service.${CNAME}/emailAddress=${email}"
+    local subject="${SUBJECT_PREFIX}/OU=Service/${suffix}"
+
+    echo ""
+    echo "  - Generating test service CA config ..."
+    if ! openssl req -nodes -x509 -days 42 -newkey "${NEWKEY_ARG}"  \
+                     -subj "${subject}" -outform PEM                \
+                     -keyout cakey.pem -out cacert.pem              \
+             > "${DEBUG_OUTPUT}" 2>&1 ; then
+        cat "${DEBUG_OUTPUT}"
+        echo "ERROR: Generating test service CA config."
+        exit 70
+    fi
+
+    echo "  - Test service CA certificate path = ${subdir}/cacert.pem"
+    echo "  - Test service CA key path = ${subdir}/cakey.pem"
+
+    #  Could just as well copy over cacert.pem to bundle/ca.pem ...
+    #  because we are just adding the CA certificate to the bundle.
+    echo "  - Creating service CA PEM bundle ..."
+    openssl x509 -outform PEM -in cacert.pem -out bundle/ca.pem
+
+    echo "  - Test service CA bundle pem path = ${subdir}/bundle/ca.pem"
+    echo "  - Generated test service CA config."
+
+    echo ""
+    echo "  - Test service bundle CA Certificate Subject:"
+    openssl x509 -in bundle/ca.pem -noout -text | grep 'Subject:'
+
+    echo ""
+    echo "  - Generating service private key and CSR ..."
+    if ! openssl req -nodes -newkey "${NEWKEY_ARG}"   \
+                     -subj "${subject}" -outform PEM  \
+                     -keyout key.pem -out csr.pem     \
+             > "${DEBUG_OUTPUT}" 2>&1 ; then
+        cat "${DEBUG_OUTPUT}"
+        echo "ERROR: Generating service private key and CSR."
+        exit 70
+    fi
+
+    echo "  - Test service private key path = ${subdir}/key.pem"
+    echo "  - Test service CSR path = ${subdir}/csr.pem"
+    echo "  - Generated service private key and CSR."
+
+    echo ""
+    echo "  - Generating service certificate ..."
+    if ! openssl x509 -req -days 42 -CAcreateserial        \
+                      -CA cacert.pem -CAkey cakey.pem      \
+                      -extfile "${EXT_CONF}" -outform PEM  \
+                      -in csr.pem -out cert.pem            \
+             > "${DEBUG_OUTPUT}" 2>&1 ; then
+        cat "${DEBUG_OUTPUT}"
+        echo "ERROR: Generating service certificate."
+        exit 70
+    fi
+
+    echo "  - Test service certificate path = ${subdir}/cert.pem"
+    echo "  - Generated service certificate."
+
+    echo ""
+    echo "  - Creating service.pem bundle ..."
+    openssl rsa -outform PEM -in key.pem > bundle/service.pem
+    openssl x509 -outform PEM -in cert.pem >> bundle/service.pem
+
+    echo "  - Test service PEM path = ${subdir}/bundle/service.pem"
+    echo ""
+    echo "  - Service Certificate Subject:"
+    openssl x509 -in bundle/service.pem -noout -text | grep 'Subject:'
+
+}  #  End of function  _generate_tls_service_config.
+
+
+#
+#  Generate TLS device configuration for running tests.
+#
+#  Usage:  _generate_tls_device_config  [ <name> ]
+#              where <name> = device cert name (default: telegraph).
+#
+#  Examples:
+#      _generate_tls_device_config
+#
+#      _generate_tls_device_config  telegraph  # default same as above
+#
+#      _generate_tls_device_config  news
+#
+#      _generate_tls_device_config  communique
+#
+#      #  Custom device ... bootstrap device.
+#      cd tls/device/bootstrap  &&  _generate_tls_device_config  bootstrap
+#
+function _generate_tls_device_config() {
+    local name=${1:-"telegraph"}
+
+    local bundle=""
+    bundle="$(pwd)/bundle"
+
+    #  Ensure output and bundle directory exists.
+    mkdir -p "${bundle}"
+
+    local email="${ORG}-device-${name}@${CNAME}"
+    local suffix="CN=${name}.device.${CNAME}/emailAddress=${email}"
+    local subject="${SUBJECT_PREFIX}/OU=Device/${suffix}"
+
+    echo ""
+    echo "  - Generating device ${name} CA config ..."
+    if ! openssl req -nodes -x509 -days 42 -newkey "${NEWKEY_ARG}"   \
+                     -subj "${subject}" -outform PEM                 \
+                     -keyout "${name}-cakey.pem"                     \
+                     -out "${name}-cacert.pem"                       \
+             > "${DEBUG_OUTPUT}" 2>&1 ; then
+        cat "${DEBUG_OUTPUT}"
+        echo "ERROR: Generating device ${name} CA config."
+        exit 70
+    fi
+
+    local subdir=""
+    subdir=$(basename "$(pwd)")
+
+    echo "  - Device ${name} CA cert path = ${subdir}/${name}-cacert.pem"
+    echo "  - Device ${name} CA key path = ${subdir}/${name}-cakey.pem"
+
+    local capem="${bundle}/ca-${name}.pem"
+
+    echo "  - Creating device ${name} CA PEM bundle ..."
+    openssl x509 -outform PEM -in "${name}-cacert.pem" -out "${capem}"
+
+    echo "  - Device ${name} CA PEM bundle path = ${capem}"
+    echo "  - Generated device ${name} CA config."
+
+    echo ""
+    echo "  - Device ${name} bundle CA Certificate Subject:"
+    openssl x509 -in "${capem}" -noout -text | grep 'Subject:'
+
+    echo ""
+    echo "  - Generating device ${name} private key and CSR ..."
+    if ! openssl req -nodes -newkey "${NEWKEY_ARG}"   \
+                     -subj "${subject}" -outform PEM  \
+                     -keyout "${name}-key.pem"        \
+                     -out "${name}-csr.pem"           \
+             > "${DEBUG_OUTPUT}" 2>&1 ; then
+        cat "${DEBUG_OUTPUT}"
+        echo "ERROR: Generating device ${name} private key and CSR."
+        exit 70
+    fi
+
+    echo "  - Generated device ${name} private key and CSR."
+
+    echo ""
+    echo "  - Generating device ${name} certificate ..."
+    openssl x509 -req -days 42 -CAcreateserial                        \
+                 -CA "${name}-cacert.pem" -CAkey "${name}-cakey.pem"  \
+                 -extfile "${DEVICE_EXT_CONF}" -outform PEM           \
+                 -in "${name}-csr.pem" -out "${name}-cert.pem"
+
+    echo "  - Generated device ${name} certificate."
+
+    local devpem="${bundle}/device-${name}.pem"
+
+    echo ""
+    echo "  - Creating PEM bundle ${devpem} ..."
+    openssl rsa -outform PEM -in "${name}-key.pem" > "${devpem}"
+    openssl x509 -outform PEM -in "${name}-cert.pem" >> "${devpem}"
+
+    echo "  - Device ${name} PEM location = ${devpem}"
+    echo ""
+    echo "  - ${name} Certificate Subject:"
+    openssl x509 -in "${devpem}" -noout -text | grep 'Subject:'
+
+}  #  End of function  _generate_tls_device_config.
+
+
+#
+#  Generate service configuration.
+#
+#  Usage:  _generate_service_config
+#
+#  Examples:
+#      _generate_service_config
+#
+function _generate_service_config() {
+    local svcdir="${TLS_CONFIG_DIR}/service"
+
+    #  Generate all files in the TLS service configuration directory.
+    (cd "${svcdir}" && _generate_tls_service_config)
+
+}  #  End of function  _generate_service_config.
+
+
+#
+#  Generate bootstrap device configuration.
+#
+#  Usage:  _generate_bootstrap_device_config
+#
+#  Examples:
+#      _generate_bootstrap_device_config
+#
+function _generate_bootstrap_device_config() {
+    local cfgdir="${TLS_CONFIG_DIR}/device/bootstrap"
+
+    mkdir -p "${cfgdir}"
+    (cd "${cfgdir}" && _generate_tls_device_config  bootstrap)
+
+}  #  End of function  _generate_bootstrap_device_config.
+
+
+#
+#  Generate device configurations.
+#
+#  Usage:  _generate_device_configs
+#
+#  Examples:
+#      _generate_device_configs
+#
+function _generate_device_configs() {
+    local cfgdir="${TLS_CONFIG_DIR}/device"
+
+    mkdir -p "${cfgdir}"
+
+    for name in news communique telegraph alchemy industrial-disease; do
+        #  Generate all files in the TLS device configuration directory.
+        (cd "${cfgdir}" && _generate_tls_device_config "${name}")
+    done
+
+}  #  End of function  _generate_device_configs.
+
+
+#
+#  Generate TLS configuration for running tests.
+#
+#  Usage:  _generate_tls_config
+#
+#  Examples:
+#      _generate_tls_config
+#
+function _generate_tls_config() {
+    _generate_service_config
+
+    _generate_bootstrap_device_config
+
+    _generate_device_configs
+
+}  #  End of function  _generate_tls_config.
+
+
+#
+#  main():
+#
+_generate_tls_config  "$@"

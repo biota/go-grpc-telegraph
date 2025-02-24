@@ -1,4 +1,4 @@
-CONFIGS = service device/bootstrap device
+CONFIGS = service bootstrap device
 
 all:	build
 

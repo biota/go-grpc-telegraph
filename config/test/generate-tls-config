@@ -131,8 +131,8 @@ function _generate_tls_service_config() {
 #
 #      _generate_tls_device_config  communique
 #
-#      #  Custom device ... bootstrap device.
-#      cd tls/device/bootstrap  &&  _generate_tls_device_config  bootstrap
+#      #  Custom ... bootstrap devices.
+#      cd tls/bootstrap  &&  _generate_tls_device_config  bootstrap
 #
 function _generate_tls_device_config() {
     local name=${1:-"telegraph"}
@@ -233,20 +233,20 @@ function _generate_service_config() {
 
 
 #
-#  Generate bootstrap device configuration.
+#  Generate bootstrap configuration.
 #
-#  Usage:  _generate_bootstrap_device_config
+#  Usage:  _generate_bootstrap_config
 #
 #  Examples:
-#      _generate_bootstrap_device_config
+#      _generate_bootstrap_config
 #
-function _generate_bootstrap_device_config() {
-    local cfgdir="${TLS_CONFIG_DIR}/device/bootstrap"
+function _generate_bootstrap_config() {
+    local cfgdir="${TLS_CONFIG_DIR}/bootstrap"
 
     mkdir -p "${cfgdir}"
     (cd "${cfgdir}" && _generate_tls_device_config  bootstrap)
 
-}  #  End of function  _generate_bootstrap_device_config.
+}  #  End of function  _generate_bootstrap_config.
 
 
 #
@@ -281,7 +281,7 @@ function _generate_device_configs() {
 function _generate_tls_config() {
     _generate_service_config
 
-    _generate_bootstrap_device_config
+    _generate_bootstrap_config
 
     _generate_device_configs
 

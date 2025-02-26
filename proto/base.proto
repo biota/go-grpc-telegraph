@@ -6,7 +6,7 @@ package local.grpc.telegraph;
 import "google/protobuf/any.proto";
 import "google/protobuf/struct.proto";
 
-option go_package = "github.com/ramr/go-grpc-telegraph/proto";
+option go_package = "github.com/biota/go-grpc-telegraph/proto";
 
 // tag-lia-tele-graph ... edelcrantzed 610-003-162!
 message Tag {

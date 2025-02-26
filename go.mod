@@ -1,4 +1,4 @@
-module github.com/ramr/go-grpc-telegraph
+module github.com/biota/go-grpc-telegraph
 
 go 1.23.1
 

@@ -5,7 +5,7 @@ package local.grpc.telegraph;
 // #includes
 import "base.proto";
 
-option go_package = "github.com/ramr/go-grpc-telegraph/proto";
+option go_package = "github.com/biota/go-grpc-telegraph/proto";
 
 // Config category enums.
 enum Category {

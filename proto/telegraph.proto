@@ -8,7 +8,7 @@ import "pubsub.proto";
 import "records.proto";
 import "wire.proto";
 
-option go_package = "github.com/ramr/go-grpc-telegraph/proto";
+option go_package = "github.com/biota/go-grpc-telegraph/proto";
 
 // Note can be either a record (basically events and messages sent from the
 // device) or it can be a subscription sent by the device.

@@ -1,6 +1,7 @@
 package util
 
 import (
+	"fmt"
 	"reflect"
 	"sort"
 	"testing"
@@ -32,6 +33,14 @@ type counterTags struct {
 	three []byte  `counter:"three"`
 	four  int64   `counter:"four"`
 	five  float64 `counter:"five"`
+}
+
+// Embedded struct with counters tags.
+type emCounterTags struct {
+	nunya    string `counter:"start"`
+	counters counterTags
+	ten      string `counter:"ten[ty]"`
+	end      string `counter:"end"`
 }
 
 // struct with env tags.
@@ -115,6 +124,25 @@ type mixedTagsTest struct {
 	nada         string  `:"vh1"`
 }
 
+// Check if the specified tags match the expected tags.
+func checkTags(tags, expected []string) error {
+	// Create a local copy and sort it for comparision purposes.
+	expectation := make([]string, len(expected))
+	copy(expectation, expected)
+	sort.Sort(sort.StringSlice(expectation))
+
+	actuals := make([]string, len(tags))
+	copy(actuals, tags)
+	sort.Sort(sort.StringSlice(actuals))
+
+	if reflect.DeepEqual(actuals, expectation) {
+		return nil
+	}
+
+	return fmt.Errorf("expected %v, got %v", expected, tags)
+
+} // End of function  checkTags.
+
 // Test StructTags function.
 func TestStructTags(t *testing.T) {
 	units := []struct {
@@ -165,6 +193,20 @@ func TestStructTags(t *testing.T) {
 			name:     "counters tags env test",
 			tag:      "env",
 			obj:      counterTags{},
+			expected: []string{},
+		},
+		{
+			name: "embedded counters tags test",
+			tag:  "counter",
+			obj:  emCounterTags{},
+			expected: []string{"start", "one", "two", "three",
+				"four", "five", "ten[ty]", "end",
+			},
+		},
+		{
+			name:     "embedded counters tags env test",
+			tag:      "env",
+			obj:      emCounterTags{},
 			expected: []string{},
 		},
 		{
@@ -246,15 +288,13 @@ func TestStructTags(t *testing.T) {
 
 	for _, step := range units {
 		t.Logf("Running test '%v', tag=%v ...", step.name, step.tag)
-
 		tags := StructTags(step.obj, step.tag)
 
-		sort.Sort(sort.StringSlice(tags))
-		sort.Sort(sort.StringSlice(step.expected))
-
-		if !reflect.DeepEqual(tags, step.expected) {
-			t.Errorf("test '%v' for tag %v expected %v, got %v",
-				step.name, step.tag, tags, step.expected)
+		if err := checkTags(tags, step.expected); err != nil {
+			t.Errorf("test '%v' for tag %v: %v", step.name,
+				step.tag, err)
+		} else {
+			t.Logf("  ~ Got expected %v tags", step.expected)
 		}
 	}
 
